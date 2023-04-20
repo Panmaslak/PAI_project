@@ -18,14 +18,13 @@ public class MainLayout extends AppLayout {
     }
 
     private void createHeader() {
-        String username = securityService.getAuthenticatedUser().getUsername();
-        H1 logo = new H1("Hello "  + username);
+        H1 logo = new H1("Kalkulator ECTS");
         logo.addClassNames(
             LumoUtility.FontSize.LARGE,
             LumoUtility.Margin.MEDIUM);
 
-
-        Button logout = new Button("Log out ", e -> securityService.logout());
+        String u = securityService.getAuthenticatedUser().getUsername();
+        Button logout = new Button("Log out " + u, e -> securityService.logout());
 
         var header = new HorizontalLayout(new DrawerToggle(), logo, logout);
 
