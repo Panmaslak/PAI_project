@@ -89,6 +89,11 @@ public class ApplicationView extends HorizontalLayout {
                         .map(subjectName -> subjectRepository.findByName(subjectName).getECTSPoints())
                         .reduce(0, Integer::sum));
 
+                String selectedSemester = semesterComboBox.getValue();
+                Integer ECTSSum = getECTSForSemester(selectedSemester);
+                Integer gainedECTSPoints = ECTSSum - ECTSPointsFromSubjectsCombobox.get();
+                gainedECTSLabel.setText("Punkty ECTS zdobyte w tym semestrze: " + gainedECTSPoints);
+
 
                 selectedOptionsLabel.setText("Wybrane przedmioty:\n" + selectedOptions);
 
@@ -102,9 +107,9 @@ public class ApplicationView extends HorizontalLayout {
         semesterComboBox.addValueChangeListener(event -> {
             String selectedSemester = event.getValue();
             List<String> subjectsForSemester = getSubjectsForSemester(selectedSemester);
+            subjectsComboBox.setItems(subjectsForSemester);
             Integer ECTSSum = getECTSForSemester(selectedSemester);
             Integer gainedECTSPoints = ECTSSum - ECTSPointsFromSubjectsCombobox.get();
-            subjectsComboBox.setItems(subjectsForSemester);
             gainedECTSLabel.setText("Punkty ECTS zdobyte w tym semestrze: " + gainedECTSPoints);
         });
     }
