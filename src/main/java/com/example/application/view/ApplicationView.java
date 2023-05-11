@@ -14,13 +14,15 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.spring.annotation.SpringComponent;
 import jakarta.annotation.security.PermitAll;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Scope;
-import org.springframework.web.bind.annotation.RequestParam;
 
+
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @SpringComponent
 @Scope("prototype")
@@ -33,34 +35,29 @@ public class ApplicationView extends HorizontalLayout {
     HorizontalLayout horizontalLayout = new HorizontalLayout();
     VerticalLayout verticalLayout = new VerticalLayout();
     HorizontalLayout comboBoxLayout = new HorizontalLayout();
-    Html leftSection = new Html("<div>" +
-            "<span style=\"white-space: nowrap;\">Łączna liczba twoich punktów</span><br/>" +
-            "<span>Twoje przedmioty:</span></div>");
-
-    Html rightSection = new Html("<div>Oblicz punkty ECTS</div>");
-    Html resultsSection = new Html("<div>Punkty ECTS zdobyte w tym semestrze:<br>" +
-            "Liczba puntów ECTS stracona w tym semetrze:<br>Aktualny dług punktowy:<br>" +
-            "Łączna kwota do zapłacenia za warunki:</div>");
+    Html leftSection;
+    Html rightSection;
     Grid<Subject> subjectGrid = new Grid<>(Subject.class);
-
     private ComboBox<String> semesterComboBox = new ComboBox<>();;
     private MultiSelectComboBox<String> subjectsComboBox = new MultiSelectComboBox<>();
-    Label selectedOptionsLabel;
+    Label selectedOptionsLabel = new Label("");
+    Label missingECTSLabel = new Label("");
+    Label gainedECTSLabel = new Label("");
     Button calculateButton = new Button("Oblicz");
-
     private Set<String> selectedOptions;
+    AtomicReference<Integer> ECTSPointsFromSubjectsCombobox = new AtomicReference<>(0);
+    Set<String> selectedSubjectNames = new HashSet<>();
 
 
     public ApplicationView(SubjectRepository subjectRepository){
         this.subjectRepository = subjectRepository;
 
         configureGrid();
-        configureComboBoxes();
+        configureComboBoxesAndLabels();
+        configureHtml();
         configureLayouts();
         configureStyles();
-        configureCalculateButton();
-        resultsSection.setVisible(false);
-        add(horizontalLayout, verticalLayout, selectedOptionsLabel);
+        add(horizontalLayout, verticalLayout, selectedOptionsLabel, missingECTSLabel, gainedECTSLabel);
     }
 
     private void configureGrid() {
@@ -69,32 +66,76 @@ public class ApplicationView extends HorizontalLayout {
         subjectGrid.removeColumnByKey("id");
         subjectGrid.getColumnByKey("name").setHeader("Nazwa");
         subjectGrid.getColumnByKey("ECTSPoints").setHeader("Punkty ECTS");
+        subjectGrid.getColumnByKey("semester").setHeader("Semestr");
     }
 
-    private void configureComboBoxes() {
+    public void configureComboBoxesAndLabels() {
         List<String> subjects = subjectRepository.findAll().stream().map(Subject::getName).collect(Collectors.toList());
         semesterComboBox.setLabel("Semestr");
         semesterComboBox.setItems("1", "2", "3", "4", "5", "6", "7");
         subjectsComboBox.setLabel("Nie zaliczone przedmioty");
         subjectsComboBox.setItems(subjects);
 
+        subjectsComboBox.addValueChangeListener(event -> {
+            selectedOptions = event.getValue();
+            if (selectedOptions != null && !selectedOptions.isEmpty()) {
+                List<Subject> selectedSubjects = subjectRepository.findAllByNameIn(selectedOptions);
+                for (Subject subject : selectedSubjects) {
+                    if (!selectedSubjectNames.contains(subject.getName())) {
+                        selectedSubjectNames.add(subject.getName());
+                    }
+                }
+                ECTSPointsFromSubjectsCombobox.set(selectedSubjectNames.stream()
+                        .map(subjectName -> subjectRepository.findByName(subjectName).getECTSPoints())
+                        .reduce(0, Integer::sum));
+
+
+                selectedOptionsLabel.setText("Wybrane przedmioty:\n" + selectedOptions);
+
+                missingECTSLabel.setText("Punkty ECTS utracone w tym semestrze: " + ECTSPointsFromSubjectsCombobox.get());
+
+            } else {
+                selectedSubjectNames.clear();
+            }
+        });
+
         semesterComboBox.addValueChangeListener(event -> {
             String selectedSemester = event.getValue();
             List<String> subjectsForSemester = getSubjectsForSemester(selectedSemester);
+            Integer ECTSSum = getECTSForSemester(selectedSemester);
+            Integer gainedECTSPoints = ECTSSum - ECTSPointsFromSubjectsCombobox.get();
             subjectsComboBox.setItems(subjectsForSemester);
+            gainedECTSLabel.setText("Punkty ECTS zdobyte w tym semestrze: " + gainedECTSPoints);
         });
+    }
+    private List<String> getSubjectsForSemester(String selectedSemester) {
+        List<Subject> allSubjects = subjectRepository.findAll();
+        List<String> subjectsForSemester = allSubjects.stream()
+                .filter(subject -> subject.getSemester().equals(selectedSemester))
+                .map(Subject::getName)
+                .collect(Collectors.toList());
+        return subjectsForSemester;
+    }
+    private Integer getECTSForSemester(String selectedSemester) {
+        List<Subject> allSubjects = subjectRepository.findAll();
+        Integer subjectsForSemester = allSubjects.stream()
+                .filter(subject -> subject.getSemester().equals(selectedSemester))
+                .mapToInt(Subject::getECTSPoints).sum();
+        return subjectsForSemester;
+    }
+    private void configureHtml(){
+        Integer ECTSPoints = subjectRepository.findAll().stream()
+                .filter(subject -> subject.getECTSPoints() != null)
+                .mapToInt(Subject::getECTSPoints).sum();
 
-        subjectsComboBox.addValueChangeListener(event -> {
-            selectedOptions = event.getValue();
-            if(selectedOptions != null && !selectedOptions.isEmpty()) {
-                String optionsText = String.join(", ", selectedOptions);
-                String labelText = "Wybrane przedmioty:\n" + optionsText;
-                selectedOptionsLabel.setText(labelText);
-            }else {
-                selectedOptionsLabel.setText("");
-            }
-        });
-        selectedOptionsLabel = new Label();
+       leftSection =  new Html("<div>" +
+                "<span style=\"white-space: nowrap;\">Łączna liczba punktów: </span>" + ECTSPoints +
+                "<br><span>Twoje przedmioty:</span></div>");
+        rightSection  = new Html("<div>Oblicz punkty ECTS</div>");
+       /* resultsSection = new Html("<div>Punkty ECTS zdobyte w tym semestrze:<br>" +
+                "<br>Liczba puntów ECTS stracona w tym semetrze: "  + ECTSPointsFromSubjectsCombobox +
+                "<br>Aktualny dług punktowy:<br> Łączna kwota do zapłacenia za warunki:</div>");*/
+
     }
 
     private void configureLayouts() {
@@ -105,7 +146,7 @@ public class ApplicationView extends HorizontalLayout {
         horizontalLayout.setJustifyContentMode(JustifyContentMode.END);
         horizontalLayout.add(leftSection);
         comboBoxLayout.add(semesterComboBox, subjectsComboBox);
-        verticalLayout.add(rightSection, comboBoxLayout, calculateButton, resultsSection, subjectGrid);
+        verticalLayout.add(comboBoxLayout, calculateButton, subjectGrid);
     }
 
     private void configureStyles(){
@@ -121,44 +162,22 @@ public class ApplicationView extends HorizontalLayout {
         calculateButton.getStyle().set("margin-left", "300px");
         calculateButton.getStyle().set("margin-bottom", "60px");
 
-        resultsSection.getStyle().set("margin-left", "300px");
-        resultsSection.getStyle().set("margin-bottom", "60px");
-        resultsSection.getStyle().set("font-size", "20px");
-
         selectedOptionsLabel.getStyle().set("margin-right", "300px");
-        selectedOptionsLabel.getStyle().set("position", "relative").set("top", "180px").set("right", "150px");
+        selectedOptionsLabel.getStyle().set("position", "relative").set("top", "240px").set("right", "420px");
+        selectedOptionsLabel.setWidth("auto");
 
-        subjectGrid.getStyle().set("position", "relative").set("right", "550px").set("top", "-200px");
+     //   missingECTSLabel.getStyle().set("margin-right", "300px");
+        missingECTSLabel.getStyle().set("position", "relative").set("top", "240px").set("right", "700px");
+        missingECTSLabel.setWidth("auto");
 
-        selectedOptionsLabel.setWidth("1500px");
-        selectedOptionsLabel.setHeight("100px");
+      // gainedECTSLabel.getStyle().set("margin-right", "300px");
+        gainedECTSLabel.getStyle().set("position", "relative").set("top", "240px").set("right", "650px");
+        gainedECTSLabel.setWidth("auto");
+
+        subjectGrid.getStyle().set("position", "relative").set("right", "500px").set("top", "-150px");
+
+
     }
-
-    private void configureCalculateButton(){
-        calculateButton.addClickListener(e -> {
-            resultsSection.setVisible(true);
-
-            List <Integer> MissingECTSPoints = subjectRepository.findAll().stream().map(Subject::getECTSPoints).collect(Collectors.toList());
-
-
-
-        });
-    }
-    private List<String> getSubjectsForSemester(String selectedSemester) {
-        List<Subject> allSubjects = subjectRepository.findAll();
-        List<String> subjectsForSemester = allSubjects.stream()
-                .filter(subject -> subject.getSemester().equals(selectedSemester))
-                .map(Subject::getName)
-                .collect(Collectors.toList());
-        return subjectsForSemester;
-    }
-
-
-
-
-
-
-
 
 }
 

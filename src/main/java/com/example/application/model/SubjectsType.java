@@ -1,3 +1,4 @@
+/*
 package com.example.application.model;
 
 import jakarta.persistence.*;
@@ -8,32 +9,25 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
-
 @Entity
 @Getter
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class Subject {
+public class SubjectsType {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "idgenerator")
-    @SequenceGenerator(name = "idgenerator", initialValue = 1000)
     @Column
     private Long id;
 
     @Column
-    @NotEmpty
-    private String name;
-
-    @Column
-    @NotEmpty
-    private Integer ECTSPoints;
-
-    @Column
     @NotNull
-    private String semester;
+    private String type;
+
+    @ManyToOne
+    @JoinColumn(name = "subject_id")
+    @NotNull
+    private Subject subject;
 }
+*/

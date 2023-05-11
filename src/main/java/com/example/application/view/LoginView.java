@@ -1,5 +1,6 @@
 package com.example.application.view;
 
+import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.login.LoginForm;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
@@ -15,6 +16,7 @@ import com.vaadin.flow.server.auth.AnonymousAllowed;
 public class LoginView extends VerticalLayout implements BeforeEnterObserver {
 
 	private final LoginForm login = new LoginForm();
+	private final Button registerButton = new Button("Zarejestruj się");
 
 	public LoginView(){
 		setSizeFull();
@@ -23,7 +25,7 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
 
 		login.setAction("login");
 
-		add(new H1("Kalkulator ECTS"), login);
+		add(new H1("Kalkulator ECTS"), login, registerButton);
 	}
 
 	@Override
